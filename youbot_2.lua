@@ -84,9 +84,26 @@ prev_ball_pos = sim.getObjectPosition(sim.getObjectHandle('ball'), 0)
 
 function sysCall_actuation() 
 
+ s=sim.getObjectSizeFactor(youBot) 
+    if (s~=previousS) then
+        
+        f=s/previousS
+        for i=1,3,1 do
+            desiredPos[i]=desiredPos[i]*f
+            currentPos[i]=currentPos[i]*f
+            ikMinPos[i]=ikMinPos[i]*f
+            ikRange[i]=ikRange[i]*f
+            initialTipPosRelative[i]=initialTipPosRelative[i]*f
+        end
+        maxPosVelocity=maxPosVelocity*f
+        previousS=s
+    end
+
     ball_pos = sim.getObjectPosition(ball, 0)
 
     my_pos = sim.getObjectPosition(youbot, 0)
+
+    ref_pos = sim.getObjectPosition(youBotRef, 0)
     
 
     --my_rot = sim.getObjectRotation(youbot, 0)
@@ -96,6 +113,9 @@ function sysCall_actuation()
     dy = my_pos[2] - ball_pos[2]
     dz = my_pos[3] - ball_pos[3]
 
+    drx = ref_pos[1] - ball_pos[1]
+    dry = ref_pos[2] - ball_pos[2]
+    drz = ref_pos[3] - ball_pos[3]
 
     front_right_pos = sim.getObjectPosition(front_right, 0)
     back_right_pos = sim.getObjectPosition(back_right, 0)
@@ -110,10 +130,17 @@ function sysCall_actuation()
 
     if(state == 0) then
         
+        desiredJ={0,30.91*math.pi/180,52.42*math.pi/180,72.68*math.pi/180,0} 
+        for i=1,5,1 do
+            cur_angle = sim.getJointPosition(armJoints[i])
+            target_angle = desiredJ[i]
+            diff = target_angle - cur_angle
+            sim.setJointPosition(armJoints[i], cur_angle + diff * .1 )
+        end
         target_angle = math.atan2(dy, dx)
         my_angle = math.atan2(dwy, dwx)
         ang_dif = target_angle - my_angle
-        rotVel = 5*(ang_dif);
+        rotVel = 7*(ang_dif);
         --print(my_rot[2] * 180 / 3.1415)
         --print(target_angle * 180 / 3.1415)
             --print('--')   
@@ -126,7 +153,16 @@ function sysCall_actuation()
             forwBackVel = 0;
         end
 
-        if(math.abs(ang_dif) < 0.01 and dist < 4) then
+        ang_err = 0.01
+        dist_err = 0.37
+        if(math.abs(ang_dif) < ang_err) then
+            rotVel = 0
+        end
+        if(dist < dist_err) then
+            forwBackVel = 0
+        end
+
+        if(math.abs(ang_dif) < ang_err and dist < dist_err) then
             state = 1
             rotVel = 0
             forwBackVel = 0
@@ -134,46 +170,18 @@ function sysCall_actuation()
     else
         rotVel = 0
         forwBackVel = 0
-
-         -- We are in IK mode
-        maxVariationAllowed=maxPosVelocity*sim.getSimulationTimeStep()
-        deltaX={0,0,0}
-        -- position:
-        desiredPos = {dx, dy, dz}
-        for i=1,3,1 do
-            delta=desiredPos[i]-currentPos[i]
-            if (math.abs(delta)>maxVariationAllowed) then
-                delta=maxVariationAllowed*delta/math.abs(delta) -- we limit the variation to the maximum allowed
-            end
-            deltaX[i]=delta
-        end
-    
-        currentPos={currentPos[1]+deltaX[1],currentPos[2]+deltaX[2],currentPos[3]+deltaX[3]}
-    
-        pos={initialTipPosRelative[1]+currentPos[1],initialTipPosRelative[2]+currentPos[2],initialTipPosRelative[3]+currentPos[3]}
-        -- We set the desired position and orientation
-        sim.setObjectPosition(target,youbot,ball_pos)--youBot,pos)
-    
-        if (sim.handleIkGroup(ik1)==sim.ikresult_fail) then
-            -- the position could not be reached.
-            sim.handleIkGroup(ik2) -- Apply a damped resolution method
-            if (ikFailedReportHandle==-1) then -- We dispblay a IK failure (in pos) report message
-                ikFailedReportHandle=sim.displayDialog("IK failure report","IK solver failed.",sim.dlgstyle_message,false,"",nil,{1,0.7,0,0,0,0})
-            end
-        else
-            if (ikFailedReportHandle>=0) then
-                sim.endDialog(ikFailedReportHandle) -- We close any report message about IK failure in orientaion
-                ikFailedReportHandle=-1
-            end
-        end
-        -- Now update the desiredJ in case we switch back to FK mode:
+        desiredJ={0, -60*math.pi / 180, -50*math.pi / 180, -55 *math.pi / 180, 0} 
         for i=1,5,1 do
-            desiredJ[i]=sim.getJointPosition(armJoints[i])
-        end 
+            cur_angle = sim.getJointPosition(armJoints[i])
+            target_angle = desiredJ[i]
+            diff = target_angle - cur_angle
+            sim.setJointPosition(armJoints[i], cur_angle + diff * .1 )
+        end
+    end 
 
 
 
-    end
+    
 
     prev_ball_pos = ball_pos
 
